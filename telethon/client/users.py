@@ -91,7 +91,9 @@ class UserMethods:
                 last_error = e
                 self._log[__name__].warning(
                     'Telegram is having internal issues %s: %s',
-                    e.__class__.__name__, e)
+                    last_error.__class__.__name__,
+                    last_error,
+                )
 
                 await asyncio.sleep(2)
             except (errors.FloodWaitError, errors.SlowModeWaitError, errors.FloodTestPhoneWaitError) as e:
@@ -109,11 +111,10 @@ class UserMethods:
                 if e.seconds == 0:
                     e.seconds = 1
 
-                if e.seconds <= self.flood_sleep_threshold:
-                    self._log[__name__].info(*_fmt_flood(e.seconds, request))
-                    await asyncio.sleep(e.seconds)
-                else:
+                if e.seconds > self.flood_sleep_threshold:
                     raise
+                self._log[__name__].info(*_fmt_flood(e.seconds, request))
+                await asyncio.sleep(e.seconds)
             except (errors.PhoneMigrateError, errors.NetworkMigrateError,
                     errors.UserMigrateError) as e:
                 last_error = e
@@ -127,8 +128,7 @@ class UserMethods:
 
         if self._raise_last_call_error and last_error is not None:
             raise last_error
-        raise ValueError('Request was unsuccessful {} time(s)'
-                         .format(attempt))
+        raise ValueError(f'Request was unsuccessful {attempt} time(s)')
 
     # region Public methods
 
@@ -464,10 +464,7 @@ class UserMethods:
                 pass
 
         raise ValueError(
-            'Could not find the input entity for {} ({}). Please read https://'
-            'docs.telethon.dev/en/latest/concepts/entities.html to'
-            ' find out more details.'
-            .format(peer, type(peer).__name__)
+            f'Could not find the input entity for {peer} ({type(peer).__name__}). Please read https://docs.telethon.dev/en/latest/concepts/entities.html to find out more details.'
         )
 
     async def _get_peer(self: 'TelegramClient', peer: 'hints.EntityLike'):
@@ -553,8 +550,7 @@ class UserMethods:
                     result = await self(
                         functions.contacts.ResolveUsernameRequest(username))
                 except errors.UsernameNotOccupiedError as e:
-                    raise ValueError('No user has "{}" as username'
-                                     .format(username)) from e
+                    raise ValueError(f'No user has "{username}" as username') from e
 
                 try:
                     pid = utils.get_peer_id(result.peer, add_mark=False)
@@ -571,9 +567,7 @@ class UserMethods:
             except ValueError:
                 pass
 
-        raise ValueError(
-            'Cannot find any entity corresponding to "{}"'.format(string)
-        )
+        raise ValueError(f'Cannot find any entity corresponding to "{string}"')
 
     async def _get_input_dialog(self: 'TelegramClient', dialog):
         """

@@ -116,10 +116,8 @@ class _DraftsIter(RequestIter):
             items = r.updates
         else:
             peers = []
-            for entity in entities:
-                peers.append(types.InputDialogPeer(
-                    await self.client.get_input_entity(entity)))
-
+            peers.extend(types.InputDialogPeer(
+                    await self.client.get_input_entity(entity)) for entity in entities)
             r = await self.client(functions.messages.GetPeerDialogsRequest(peers))
             items = r.dialogs
 
@@ -310,10 +308,7 @@ class DialogMethods:
                 print(drafts.text)
         """
         items = await self.iter_drafts(entity).collect()
-        if not entity or utils.is_list_like(entity):
-            return items
-        else:
-            return items[0]
+        return items if not entity or utils.is_list_like(entity) else items[0]
 
     async def edit_folder(
             self: 'TelegramClient',
@@ -380,11 +375,11 @@ class DialogMethods:
                 folder_id=unpack
             ))
 
-        if not utils.is_list_like(entity):
-            entities = [await self.get_input_entity(entity)]
-        else:
-            entities = await asyncio.gather(
-                *(self.get_input_entity(x) for x in entity))
+        entities = (
+            await asyncio.gather(*(self.get_input_entity(x) for x in entity))
+            if utils.is_list_like(entity)
+            else [await self.get_input_entity(entity)]
+        )
 
         if folder is None:
             raise ValueError('You must specify a folder')
@@ -443,11 +438,7 @@ class DialogMethods:
         """
         # If we have enough information (`Dialog.delete` gives it to us),
         # then we know we don't have to kick ourselves in deactivated chats.
-        if isinstance(entity, types.Chat):
-            deactivated = entity.deactivated
-        else:
-            deactivated = False
-
+        deactivated = entity.deactivated if isinstance(entity, types.Chat) else False
         entity = await self.get_input_entity(entity)
         ty = helpers._entity_type(entity)
         if ty == helpers._EntityType.CHANNEL:
