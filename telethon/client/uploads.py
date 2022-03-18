@@ -352,11 +352,7 @@ class UploadMethods:
         # First check if the user passed an iterable, in which case
         # we may want to send grouped.
         if utils.is_list_like(file):
-            if utils.is_list_like(caption):
-                captions = caption
-            else:
-                captions = [caption]
-
+            captions = caption if utils.is_list_like(caption) else [caption]
             result = []
             while file:
                 result += await self._send_album(
@@ -431,8 +427,10 @@ class UploadMethods:
             caption = (caption,)
 
         captions = []
-        for c in reversed(caption):  # Pop from the end (so reverse)
-            captions.append(await self._parse_message_text(c or '', parse_mode))
+        captions.extend(
+            await self._parse_message_text(c or '', parse_mode)
+            for c in reversed(caption)
+        )
 
         reply_to = utils.get_message_id(reply_to)
 
@@ -460,10 +458,7 @@ class UploadMethods:
                 fm = utils.get_input_media(
                     r.document, supports_streaming=supports_streaming)
 
-            if captions:
-                caption, msg_entities = captions.pop()
-            else:
-                caption, msg_entities = '', None
+            caption, msg_entities = captions.pop() if captions else ('', None)
             media.append(types.InputSingleMedia(
                 fm,
                 message=caption,
@@ -613,15 +608,17 @@ class UploadMethods:
 
                 if not isinstance(part, bytes):
                     raise TypeError(
-                        'file descriptor returned {}, not bytes (you must '
-                        'open the file in bytes mode)'.format(type(part)))
+                        f'file descriptor returned {type(part)}, not bytes (you must open the file in bytes mode)'
+                    )
+
 
                 # `file_size` could be wrong in which case `part` may not be
                 # `part_size` before reaching the end.
                 if len(part) != part_size and part_index < part_count - 1:
                     raise ValueError(
-                        'read less than {} before reaching the end; either '
-                        '`file_size` or `read` are wrong'.format(part_size))
+                        f'read less than {part_size} before reaching the end; either `file_size` or `read` are wrong'
+                    )
+
 
                 pos += len(part)
 
@@ -645,15 +642,13 @@ class UploadMethods:
                         file_id, part_index, part)
 
                 result = await self(request)
-                if result:
-                    self._log[__name__].debug('Uploaded %d/%d',
-                                              part_index + 1, part_count)
-                    if progress_callback:
-                        await helpers._maybe_await(progress_callback(pos, file_size))
-                else:
-                    raise RuntimeError(
-                        'Failed to upload file part {}.'.format(part_index))
+                if not result:
+                    raise RuntimeError(f'Failed to upload file part {part_index}.')
 
+                self._log[__name__].debug('Uploaded %d/%d',
+                                          part_index + 1, part_count)
+                if progress_callback:
+                    await helpers._maybe_await(progress_callback(pos, file_size))
         if is_big:
             return types.InputFileBig(file_id, part_count, file_name)
         else:
@@ -716,22 +711,22 @@ class UploadMethods:
                 progress_callback=progress_callback
             )
         elif re.match('https?://', file):
-            if as_image:
-                media = types.InputMediaPhotoExternal(file, ttl_seconds=ttl)
-            else:
-                media = types.InputMediaDocumentExternal(file, ttl_seconds=ttl)
-        else:
-            bot_file = utils.resolve_bot_file_id(file)
-            if bot_file:
-                media = utils.get_input_media(bot_file, ttl=ttl)
+            media = (
+                types.InputMediaPhotoExternal(file, ttl_seconds=ttl)
+                if as_image
+                else types.InputMediaDocumentExternal(file, ttl_seconds=ttl)
+            )
+
+        elif bot_file := utils.resolve_bot_file_id(file):
+            media = utils.get_input_media(bot_file, ttl=ttl)
 
         if media:
             pass  # Already have media, don't check the rest
         elif not file_handle:
             raise ValueError(
-                'Failed to convert {} to media. Not an existing file, '
-                'an HTTP URL or a valid bot-API-like file ID'.format(file)
+                f'Failed to convert {file} to media. Not an existing file, an HTTP URL or a valid bot-API-like file ID'
             )
+
         elif as_image:
             media = types.InputMediaUploadedPhoto(file_handle, ttl_seconds=ttl)
         else:

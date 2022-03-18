@@ -37,8 +37,7 @@ def generate_errors(errors, f):
             f.write('def __init__(self, request):\n    '
                     '    self.request = request\n        ')
 
-        f.write('super(Exception, self).__init__('
-                '{}'.format(repr(error.description)))
+        f.write(f'super(Exception, self).__init__({repr(error.description)}')
 
         if error.has_captures:
             f.write('.format({0}=self.{0})'.format(error.capture_name))
